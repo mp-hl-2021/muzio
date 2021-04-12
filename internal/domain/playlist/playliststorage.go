@@ -3,12 +3,13 @@ package playlist
 type Playlist struct {
 	Id      string
 	Owner   string
+	Name    string
 	Content []string // ids of MusicalEntity-es
 }
 
 type Interface interface {
-	CreatePlaylist(owner string, content []string) (Playlist, error)
+	CreatePlaylist(owner, name string, content []string) (Playlist, error)
 	GetPlaylistById(id string) (Playlist, error)
-	UpdatePlayList(id string, content []string) error
-	DeletePlayList(id string) error
+	UpdatePlaylist(id, name string, content []string) error
+	DeletePlaylist(id string) error
 }

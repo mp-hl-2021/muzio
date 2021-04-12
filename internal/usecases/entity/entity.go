@@ -17,7 +17,7 @@ type MusicalEntity struct {
 }
 
 type Interface interface {
-	CreateMusicalEntity(artist string, album string, track string) (MusicalEntity, error)
+	CreateMusicalEntity(artist, album, track string, links []Link) (string, error)
 	GetMusicalEntityById(id string) (MusicalEntity, error)
 }
 
@@ -25,10 +25,32 @@ type UseCases struct {
 	EntityStorage entity.Interface
 }
 
-func (u *UseCases) CreateMusicalEntity(artist string, album string, track string,) (MusicalEntity, error) {
-	panic("implement me")
+func (u *UseCases) CreateMusicalEntity(artist, album, track string, links []Link) (string, error) {
+	nl := make([]entity.Link, 0, len(links))
+	for _, l := range links {
+		nl = append(nl, entity.Link{
+			ServiceName: l.ServiceName,
+			Url: l.Url,
+		})
+	}
+	e, err := u.EntityStorage.CreateMusicalEntity(artist, album, track, nl)
+	if err != nil {
+		return "", err
+	}
+	return e.Id, nil
 }
 
 func (u *UseCases) GetMusicalEntityById(id string) (MusicalEntity, error) {
-	panic("implement me")
+	e, err := u.EntityStorage.GetMusicalEntityById(id)
+	if err != nil {
+		return MusicalEntity{}, err
+	}
+	nl := make([]Link, 0, len(e.Links))
+	for _, l := range e.Links {
+		nl = append(nl, Link{
+			ServiceName: l.ServiceName,
+			Url: l.Url,
+		})
+	}
+	return MusicalEntity{Artist: e.Artist, Album: e.Album, Track: e.Track, Links: nl}, err
 }

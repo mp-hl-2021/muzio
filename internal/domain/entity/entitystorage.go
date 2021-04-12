@@ -14,6 +14,6 @@ type MusicalEntity struct {
 }
 
 type Interface interface {
-	CreateMusicalEntity(artist string, album string, track string) (MusicalEntity, error)
+	CreateMusicalEntity(artist, album, track string, links []Link) (MusicalEntity, error)
 	GetMusicalEntityById(id string) (MusicalEntity, error)
 }
