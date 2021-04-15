@@ -41,8 +41,8 @@ func (a *Api) Router() http.Handler {
 	router.HandleFunc("/playlist/{"+playlistIdUrlPathKey+"}", a.authenticate(a.putPlaylist)).Methods(http.MethodPut)
 	router.HandleFunc("/playlist/{"+playlistIdUrlPathKey+"}", a.authenticate(a.deletePlaylist)).Methods(http.MethodDelete)
 
-	router.HandleFunc("/drop/music/", a.postMusicalEntity).Methods(http.MethodPost)
-	router.HandleFunc("/drop/playlist/", a.authenticate(a.postPlaylist)).Methods(http.MethodPost)
+	router.HandleFunc("/drop/music", a.postMusicalEntity).Methods(http.MethodPost)
+	router.HandleFunc("/drop/playlist", a.authenticate(a.postPlaylist)).Methods(http.MethodPost)
 
 	return router
 }
@@ -173,7 +173,7 @@ func (a *Api) deletePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 type postEntityResponseModel struct {
-	Id string `json:"name"`
+	Id string `json:"id"`
 }
 
 func (a *Api) postMusicalEntity(w http.ResponseWriter, r *http.Request) {
