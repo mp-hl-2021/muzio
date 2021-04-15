@@ -1,6 +1,7 @@
 package entityrepo
 
 import (
+	"github.com/mp-hl-2021/muzio/internal/common"
 	"github.com/mp-hl-2021/muzio/internal/domain"
 	"github.com/mp-hl-2021/muzio/internal/domain/entity"
 	"strconv"
@@ -20,7 +21,7 @@ func NewMemory() *Memory {
 	}
 }
 
-func (m *Memory) CreateMusicalEntity(artist string, album string, track string, links []entity.Link) (entity.MusicalEntity, error) {
+func (m *Memory) CreateMusicalEntity(artist string, album string, track string, links []common.Link) (entity.MusicalEntity, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	e := entity.MusicalEntity{

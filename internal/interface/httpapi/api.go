@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"github.com/gorilla/mux"
+	"github.com/mp-hl-2021/muzio/internal/common"
 	"github.com/mp-hl-2021/muzio/internal/usecases/account"
 	"github.com/mp-hl-2021/muzio/internal/usecases/entity"
 	"github.com/mp-hl-2021/muzio/internal/usecases/playlist"
@@ -59,16 +60,11 @@ func (a *Api) postSignin(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-type link struct {
-	ServiceName string `json:"serviceName"`
-	Url         string `json:"url"`
-}
-
 type getMusicalEntityResponseModel struct {
-	Artist string `json:"artist"`
-	Album  string `json:"album"`
-	Track  string `json:"track"`
-	Links  []link `json:"links"`
+	Artist string        `json:"artist"`
+	Album  string        `json:"album"`
+	Track  string        `json:"track"`
+	Links  []common.Link `json:"links"`
 }
 
 func (a *Api) getMusicalEntity(w http.ResponseWriter, r *http.Request) {
@@ -87,13 +83,7 @@ func (a *Api) getMusicalEntity(w http.ResponseWriter, r *http.Request) {
 		Artist: e.Artist,
 		Album: e.Album,
 		Track: e.Track,
-		Links: make([]link, 0, len(e.Links)),
-	}
-	for _, l := range e.Links {
-		m.Links = append(m.Links, link{
-			ServiceName: l.ServiceName,
-			Url: l.Url,
-		})
+		Links: e.Links,
 	}
 	if err := json.NewEncoder(w).Encode(m); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -132,13 +122,7 @@ func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
 			Artist: e.Artist,
 			Album: e.Album,
 			Track: e.Track,
-			Links: make([]link, 0, len(e.Links)),
-		}
-		for _, l := range em.Links {
-			em.Links = append(em.Links, link{
-				ServiceName: l.ServiceName,
-				Url: l.Url,
-			})
+			Links: e.Links,
 		}
 		m.Content = append(m.Content, em)
 	}
@@ -198,14 +182,7 @@ func (a *Api) postMusicalEntity(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	nl := make([]entity.Link, 0, len(m.Links))
-	for _, l := range nl {
-		nl = append(nl, entity.Link{
-			ServiceName: l.ServiceName,
-			Url: l.Url,
-		})
-	}
-	eid, err := a.MusicalEntityUseCases.CreateMusicalEntity(m.Artist, m.Album, m.Track, nl)
+	eid, err := a.MusicalEntityUseCases.CreateMusicalEntity(m.Artist, m.Album, m.Track, m.Links)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

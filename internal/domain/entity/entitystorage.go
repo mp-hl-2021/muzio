@@ -1,19 +1,16 @@
 package entity
 
-type Link struct {
-	ServiceName string
-	Url         string
-}
+import "github.com/mp-hl-2021/muzio/internal/common"
 
 type MusicalEntity struct {
 	Id     string
 	Artist string
 	Album  string
 	Track  string
-	Links  []Link
+	Links  []common.Link
 }
 
 type Interface interface {
-	CreateMusicalEntity(artist, album, track string, links []Link) (MusicalEntity, error)
+	CreateMusicalEntity(artist, album, track string, links []common.Link) (MusicalEntity, error)
 	GetMusicalEntityById(id string) (MusicalEntity, error)
 }
