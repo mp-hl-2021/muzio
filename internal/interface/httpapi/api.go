@@ -1,18 +1,23 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/mp-hl-2021/muzio/internal/common"
 	"github.com/mp-hl-2021/muzio/internal/usecases/account"
 	"github.com/mp-hl-2021/muzio/internal/usecases/entity"
 	"github.com/mp-hl-2021/muzio/internal/usecases/playlist"
 	"net/http"
+	"strings"
 )
 
 const (
 	entityIdUrlPathKey   = "entity_id"
 	playlistIdUrlPathKey = "playlist_id"
+	accountIdContextKey  = "account_id"
 )
 
 type Api struct {
@@ -53,11 +58,39 @@ type postSignupRequestModel struct {
 }
 
 func (a *Api) postSignup(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	var model postSignupRequestModel
+	err := json.NewDecoder(r.Body).Decode(&model)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	acc, err := a.AccountUseCases.CreateAccount(model.Login, model.Password)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	location := fmt.Sprintf("/accounts/%s", acc.Id)
+	w.Header().Set("Location", location)
+	w.WriteHeader(http.StatusCreated)
 }
 
 func (a *Api) postSignin(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	var model postSignupRequestModel
+	err := json.NewDecoder(r.Body).Decode(&model)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	token, err := a.AccountUseCases.LoginToAccount(model.Login, model.Password)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/jwt")
+	w.Write([]byte(token))
 }
 
 type getMusicalEntityResponseModel struct {
@@ -149,7 +182,18 @@ func (a *Api) putPlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err := a.PlaylistUseCases.UpdatePlayList(pid, m.Name, m.Content)
+	playList, err := a.PlaylistUseCases.GetPlaylistById(pid)
+	if err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if err := a.accessibility(playList.Owner, r.Context()); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	err = a.PlaylistUseCases.UpdatePlayList(pid, m.Name, m.Content)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -164,7 +208,18 @@ func (a *Api) deletePlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err := a.PlaylistUseCases.DeletePlayList(pid)
+	playList, err := a.PlaylistUseCases.GetPlaylistById(pid)
+	if err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if err := a.accessibility(playList.Owner, r.Context()); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	err = a.PlaylistUseCases.DeletePlayList(pid)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -195,7 +250,7 @@ func (a *Api) postMusicalEntity(w http.ResponseWriter, r *http.Request) {
 }
 
 type postPlaylistRequestModel struct {
-	Owner   string   `json:"owner"` // TODO: Auth
+	Owner   string   `json:"owner"`
 	Name    string   `json:"name"`
 	Content []string `json:"content"`
 }
@@ -206,6 +261,12 @@ func (a *Api) postPlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	if err := a.accessibility(m.Owner, r.Context()); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
 	pid, err := a.PlaylistUseCases.CreatePlaylist(m.Owner, m.Name, m.Content)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -218,7 +279,29 @@ func (a *Api) postPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *Api) accessibility(owner string, ctx context.Context) error {
+	uId := ctx.Value(accountIdContextKey)
+	if uId != owner {
+		return errors.New("Access denied")
+	}
+	return nil
+}
+
 func (a *Api) authenticate(handler http.HandlerFunc) http.HandlerFunc {
-	// TODO implement
-	return handler
+	return func(w http.ResponseWriter, r *http.Request) {
+		bearer := r.Header.Get("Authorization")
+		strArr := strings.Split(bearer, " ")
+		if len(strArr) != 2 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		token := strArr[1]
+		accId, err := a.AccountUseCases.Authenticate(token)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), accountIdContextKey, accId)
+		handler(w, r.WithContext(ctx))
+	}
 }
