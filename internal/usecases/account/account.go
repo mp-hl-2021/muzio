@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	minLoginLength    = 6
+	minLoginLength    = 3
 	maxLoginLength    = 20
-	minPasswordLength = 14
+	minPasswordLength = 3
 	maxPasswordLength = 48
 )
 
@@ -67,22 +67,27 @@ func (a *UseCases) GetAccountById(id string) (Account, error) {
 
 func (a *UseCases) LoginToAccount(login, password string) (string, error) {
 	err := validateLogin(login)
+	fmt.Println(err)
 	if err != nil {
 		return "", err
 	}
 	err = validatePassword(password)
+	fmt.Println(err)
 	if err != nil {
 		return "", err
 	}
 	acc, err := a.AccountStorage.GetAccountByLogin(login)
+	fmt.Println(err)
 	if err != nil {
 		return "", err
 	}
 	err = bcrypt.CompareHashAndPassword([]byte(acc.Credentials.Password), []byte(password))
+	fmt.Println(err)
 	if err != nil {
 		return "", err
 	}
 	t, err := a.AuthToken.IssueToken(acc.Id)
+	fmt.Println(err)
 	if err != nil {
 		return "", err
 	}
