@@ -3,10 +3,10 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/mp-hl-2021/muzio/internal/common"
+	"github.com/mp-hl-2021/muzio/internal/domain"
 	"github.com/mp-hl-2021/muzio/internal/usecases/account"
 	"github.com/mp-hl-2021/muzio/internal/usecases/entity"
 	"github.com/mp-hl-2021/muzio/internal/usecases/playlist"
@@ -67,7 +67,7 @@ func (a *Api) postSignup(w http.ResponseWriter, r *http.Request) {
 
 	acc, err := a.AccountUseCases.CreateAccount(model.Login, model.Password)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(err, w)
 		return
 	}
 
@@ -109,7 +109,7 @@ func (a *Api) getMusicalEntity(w http.ResponseWriter, r *http.Request) {
 	}
 	e, err := a.MusicalEntityUseCases.GetMusicalEntityById(eid)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(err, w)
 		return
 	}
 	m := getMusicalEntityResponseModel{
@@ -138,7 +138,7 @@ func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := a.PlaylistUseCases.GetPlaylistById(pid)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(err, w)
 		return
 	}
 	m := getPlaylistResponseModel{
@@ -148,7 +148,7 @@ func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
 	for _, c := range p.Content {
 		e, err := a.MusicalEntityUseCases.GetMusicalEntityById(c)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			handleError(err, w)
 			return
 		}
 		em := getMusicalEntityResponseModel{
@@ -182,20 +182,14 @@ func (a *Api) putPlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	playList, err := a.PlaylistUseCases.GetPlaylistById(pid)
-	if err != nil {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	if err := a.accessibility(playList.Owner, r.Context()); err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-
-	err = a.PlaylistUseCases.UpdatePlayList(pid, m.Name, m.Content)
-	if err != nil {
+	uid, ok := r.Context().Value(accountIdContextKey).(string)
+	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err := a.PlaylistUseCases.UpdatePlayList(uid, pid, m.Name, m.Content)
+	if err != nil {
+		handleError(err, w)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -208,20 +202,14 @@ func (a *Api) deletePlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	playList, err := a.PlaylistUseCases.GetPlaylistById(pid)
-	if err != nil {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	if err := a.accessibility(playList.Owner, r.Context()); err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-
-	err = a.PlaylistUseCases.DeletePlayList(pid)
-	if err != nil {
+	uid, ok := r.Context().Value(accountIdContextKey).(string)
+	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err := a.PlaylistUseCases.DeletePlayList(uid, pid)
+	if err != nil {
+		handleError(err, w)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -250,7 +238,6 @@ func (a *Api) postMusicalEntity(w http.ResponseWriter, r *http.Request) {
 }
 
 type postPlaylistRequestModel struct {
-	Owner   string   `json:"owner"`
 	Name    string   `json:"name"`
 	Content []string `json:"content"`
 }
@@ -262,14 +249,14 @@ func (a *Api) postPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.accessibility(m.Owner, r.Context()); err != nil {
-		w.WriteHeader(http.StatusForbidden)
+	uid, ok := r.Context().Value(accountIdContextKey).(string)
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	pid, err := a.PlaylistUseCases.CreatePlaylist(m.Owner, m.Name, m.Content)
+	pid, err := a.PlaylistUseCases.CreatePlaylist(uid, m.Name, m.Content)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(err, w)
 		return
 	}
 	nm := postEntityResponseModel{Id: pid}
@@ -280,9 +267,9 @@ func (a *Api) postPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Api) accessibility(owner string, ctx context.Context) error {
-	uId := ctx.Value(accountIdContextKey)
-	if uId != owner {
-		return errors.New("Access denied")
+	uid := ctx.Value(accountIdContextKey)
+	if uid != owner {
+		return domain.ErrForbidden
 	}
 	return nil
 }
@@ -304,4 +291,20 @@ func (a *Api) authenticate(handler http.HandlerFunc) http.HandlerFunc {
 		ctx := context.WithValue(r.Context(), accountIdContextKey, accId)
 		handler(w, r.WithContext(ctx))
 	}
+}
+
+func handleError(err error, w http.ResponseWriter) {
+	if err == domain.ErrNotFound {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if err == domain.ErrUnauthorized {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if err == domain.ErrForbidden {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	w.WriteHeader(http.StatusInternalServerError)
 }

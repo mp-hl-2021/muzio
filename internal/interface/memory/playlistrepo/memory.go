@@ -53,6 +53,7 @@ func (m *Memory) UpdatePlaylist(id string, name string, content []string) error 
 	}
 	p.Name = name
 	p.Content = content
+	m.playlistsById[id] = p
 	return nil
 }
 
