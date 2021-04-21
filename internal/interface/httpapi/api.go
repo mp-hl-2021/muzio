@@ -1,18 +1,23 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/mp-hl-2021/muzio/internal/common"
+	"github.com/mp-hl-2021/muzio/internal/domain"
 	"github.com/mp-hl-2021/muzio/internal/usecases/account"
 	"github.com/mp-hl-2021/muzio/internal/usecases/entity"
 	"github.com/mp-hl-2021/muzio/internal/usecases/playlist"
 	"net/http"
+	"strings"
 )
 
 const (
 	entityIdUrlPathKey   = "entity_id"
 	playlistIdUrlPathKey = "playlist_id"
+	accountIdContextKey  = "account_id"
 )
 
 type Api struct {
@@ -53,11 +58,39 @@ type postSignupRequestModel struct {
 }
 
 func (a *Api) postSignup(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	var model postSignupRequestModel
+	err := json.NewDecoder(r.Body).Decode(&model)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	acc, err := a.AccountUseCases.CreateAccount(model.Login, model.Password)
+	if err != nil {
+		handleError(err, w)
+		return
+	}
+
+	location := fmt.Sprintf("/accounts/%s", acc.Id)
+	w.Header().Set("Location", location)
+	w.WriteHeader(http.StatusCreated)
 }
 
 func (a *Api) postSignin(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	var model postSignupRequestModel
+	err := json.NewDecoder(r.Body).Decode(&model)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	token, err := a.AccountUseCases.LoginToAccount(model.Login, model.Password)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/jwt")
+	w.Write([]byte(token))
 }
 
 type getMusicalEntityResponseModel struct {
@@ -76,7 +109,7 @@ func (a *Api) getMusicalEntity(w http.ResponseWriter, r *http.Request) {
 	}
 	e, err := a.MusicalEntityUseCases.GetMusicalEntityById(eid)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(err, w)
 		return
 	}
 	m := getMusicalEntityResponseModel{
@@ -105,7 +138,7 @@ func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := a.PlaylistUseCases.GetPlaylistById(pid)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(err, w)
 		return
 	}
 	m := getPlaylistResponseModel{
@@ -115,7 +148,7 @@ func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
 	for _, c := range p.Content {
 		e, err := a.MusicalEntityUseCases.GetMusicalEntityById(c)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			handleError(err, w)
 			return
 		}
 		em := getMusicalEntityResponseModel{
@@ -149,9 +182,14 @@ func (a *Api) putPlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err := a.PlaylistUseCases.UpdatePlayList(pid, m.Name, m.Content)
-	if err != nil {
+	uid, ok := r.Context().Value(accountIdContextKey).(string)
+	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err := a.PlaylistUseCases.UpdatePlayList(uid, pid, m.Name, m.Content)
+	if err != nil {
+		handleError(err, w)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -164,9 +202,14 @@ func (a *Api) deletePlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err := a.PlaylistUseCases.DeletePlayList(pid)
-	if err != nil {
+	uid, ok := r.Context().Value(accountIdContextKey).(string)
+	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err := a.PlaylistUseCases.DeletePlayList(uid, pid)
+	if err != nil {
+		handleError(err, w)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -195,7 +238,6 @@ func (a *Api) postMusicalEntity(w http.ResponseWriter, r *http.Request) {
 }
 
 type postPlaylistRequestModel struct {
-	Owner   string   `json:"owner"` // TODO: Auth
 	Name    string   `json:"name"`
 	Content []string `json:"content"`
 }
@@ -206,9 +248,15 @@ func (a *Api) postPlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	pid, err := a.PlaylistUseCases.CreatePlaylist(m.Owner, m.Name, m.Content)
-	if err != nil {
+
+	uid, ok := r.Context().Value(accountIdContextKey).(string)
+	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	pid, err := a.PlaylistUseCases.CreatePlaylist(uid, m.Name, m.Content)
+	if err != nil {
+		handleError(err, w)
 		return
 	}
 	nm := postEntityResponseModel{Id: pid}
@@ -218,7 +266,45 @@ func (a *Api) postPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *Api) accessibility(owner string, ctx context.Context) error {
+	uid := ctx.Value(accountIdContextKey)
+	if uid != owner {
+		return domain.ErrForbidden
+	}
+	return nil
+}
+
 func (a *Api) authenticate(handler http.HandlerFunc) http.HandlerFunc {
-	// TODO implement
-	return handler
+	return func(w http.ResponseWriter, r *http.Request) {
+		bearer := r.Header.Get("Authorization")
+		strArr := strings.Split(bearer, " ")
+		if len(strArr) != 2 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		token := strArr[1]
+		accId, err := a.AccountUseCases.Authenticate(token)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), accountIdContextKey, accId)
+		handler(w, r.WithContext(ctx))
+	}
+}
+
+func handleError(err error, w http.ResponseWriter) {
+	if err == domain.ErrNotFound {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if err == domain.ErrUnauthorized {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if err == domain.ErrForbidden {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	w.WriteHeader(http.StatusInternalServerError)
 }
