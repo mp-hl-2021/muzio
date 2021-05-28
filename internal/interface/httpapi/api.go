@@ -10,8 +10,12 @@ import (
 	"github.com/mp-hl-2021/muzio/internal/usecases/account"
 	"github.com/mp-hl-2021/muzio/internal/usecases/entity"
 	"github.com/mp-hl-2021/muzio/internal/usecases/playlist"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -24,6 +28,7 @@ type Api struct {
 	AccountUseCases       account.Interface
 	MusicalEntityUseCases entity.Interface
 	PlaylistUseCases      playlist.Interface
+	Logger 				  zerolog.Logger
 }
 
 func NewApi(a account.Interface, e entity.Interface, p playlist.Interface) *Api {
@@ -31,11 +36,16 @@ func NewApi(a account.Interface, e entity.Interface, p playlist.Interface) *Api 
 		AccountUseCases: a,
 		MusicalEntityUseCases: e,
 		PlaylistUseCases: p,
+		Logger: log.With().Str("module", "http-server").Logger(),
 	}
 }
 
 func (a *Api) Router() http.Handler {
 	router := mux.NewRouter()
+
+	router.Handle("/metrics", promhttp.Handler())
+	router.Use(measurer())
+	router.Use(a.logger)
 
 	router.HandleFunc("/signup", a.postSignup).Methods(http.MethodPost)
 	router.HandleFunc("/signin", a.postSignin).Methods(http.MethodPost)
@@ -307,4 +317,36 @@ func handleError(err error, w http.ResponseWriter) {
 		return
 	}
 	w.WriteHeader(http.StatusInternalServerError)
+}
+
+type responseWriterObserver struct {
+	http.ResponseWriter
+	status		 int
+	wroteHandler bool
+}
+
+func (o *responseWriterObserver) WriteHandler(code int) {
+	o.ResponseWriter.WriteHeader(code)
+	if o.wroteHandler {
+		return
+	}
+	o.wroteHandler = true
+	o.status = code
+}
+
+func (o *responseWriterObserver) StatusCode() int {
+	if !o.wroteHandler {
+		return http.StatusOK
+	}
+	return o.status
+}
+
+func (a *Api) logger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		o := &responseWriterObserver{ResponseWriter: w}
+		next.ServeHTTP(o, r)
+		fmt.Printf("method: %s; url: %s; status-code: %d; remote-addr: %s; duration: %v;\n",
+			r.Method, r.URL.String(), o.StatusCode(), r.RemoteAddr, time.Since(start))
+	})
 }
