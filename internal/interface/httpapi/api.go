@@ -62,13 +62,13 @@ func (a *Api) Router() http.Handler {
 	return router
 }
 
-type postSignupRequestModel struct {
+type PostSignupRequestModel struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
 }
 
 func (a *Api) postSignup(w http.ResponseWriter, r *http.Request) {
-	var model postSignupRequestModel
+	var model PostSignupRequestModel
 	err := json.NewDecoder(r.Body).Decode(&model)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -87,7 +87,7 @@ func (a *Api) postSignup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Api) postSignin(w http.ResponseWriter, r *http.Request) {
-	var model postSignupRequestModel
+	var model PostSignupRequestModel
 	err := json.NewDecoder(r.Body).Decode(&model)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
