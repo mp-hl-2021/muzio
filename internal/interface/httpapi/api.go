@@ -49,6 +49,7 @@ func (a *Api) Router() http.Handler {
 	router.Use(measurer())
 
 	router.HandleFunc("/blank", a.blank).Methods(http.MethodGet)
+	router.HandleFunc("/blanka", a.authenticate(a.blanka)).Methods(http.MethodGet)
 
 	router.HandleFunc("/signup", a.postSignup).Methods(http.MethodPost)
 	router.HandleFunc("/signin", a.postSignin).Methods(http.MethodPost)
@@ -82,6 +83,13 @@ func (a *Api) blank(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(b)
 	w.Write(b)
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (a *Api) blanka(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Location", "loc")
+	fmt.Println("Authed")
+	w.Write([]byte("Authed"))
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -125,7 +133,7 @@ func (a *Api) postSignin(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(token))
 }
 
-type getMusicalEntityResponseModel struct {
+type GetMusicalEntityResponseModel struct {
 	Artist string        `json:"artist"`
 	Album  string        `json:"album"`
 	Track  string        `json:"track"`
@@ -145,7 +153,7 @@ func (a *Api) getMusicalEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.checkMusicalEntity(eid)
-	m := getMusicalEntityResponseModel{
+	m := GetMusicalEntityResponseModel{
 		Artist: e.Artist,
 		Album: e.Album,
 		Track: e.Track,
@@ -159,7 +167,7 @@ func (a *Api) getMusicalEntity(w http.ResponseWriter, r *http.Request) {
 
 type getPlaylistResponseModel struct {
 	Name    string                          `json:"name"`
-	Content []getMusicalEntityResponseModel `json:"content"`
+	Content []GetMusicalEntityResponseModel `json:"content"`
 }
 
 func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +185,7 @@ func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
 	a.checkPlaylist(pid)
 	m := getPlaylistResponseModel{
 		Name: p.Name,
-		Content: make([]getMusicalEntityResponseModel, 0, len(p.Content)),
+		Content: make([]GetMusicalEntityResponseModel, 0, len(p.Content)),
 	}
 	for _, c := range p.Content {
 		e, err := a.MusicalEntityUseCases.GetMusicalEntityById(c)
@@ -185,7 +193,7 @@ func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
 			handleError(err, w)
 			return
 		}
-		em := getMusicalEntityResponseModel{
+		em := GetMusicalEntityResponseModel{
 			Artist: e.Artist,
 			Album: e.Album,
 			Track: e.Track,
@@ -250,6 +258,7 @@ func (a *Api) deletePlaylist(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+
 type link struct {
 	ServiceName string `json:"serviceName"`
 	Url         string `json:"url"`
@@ -262,11 +271,12 @@ type postMusicalEntityRequestModel struct {
 	Links  []link `json:"links"`
 }
 
-type postMusicalEntityResponseModel struct {
+type PostMusicalEntityResponseModel struct {
 	Id string `json:"id"`
 }
 
 func (a *Api) postMusicalEntity(w http.ResponseWriter, r *http.Request) {
+
 	var m postMusicalEntityRequestModel
 	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -281,8 +291,9 @@ func (a *Api) postMusicalEntity(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	a.checkMusicalEntity(eid)
-	nm := postMusicalEntityResponseModel{Id: eid}
+	nm := PostMusicalEntityResponseModel{Id: eid}
 	if err := json.NewEncoder(w).Encode(nm); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -312,7 +323,7 @@ func (a *Api) postPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.checkPlaylist(pid)
-	nm := postMusicalEntityResponseModel{Id: pid}
+	nm := PostMusicalEntityResponseModel{Id: pid}
 	if err := json.NewEncoder(w).Encode(nm); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
