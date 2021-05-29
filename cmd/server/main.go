@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/mp-hl-2021/muzio/internal/interface/httpapi"
+	"github.com/mp-hl-2021/muzio/internal/interface/linkchecker"
 	"github.com/mp-hl-2021/muzio/internal/interface/memory/accountrepo"
 	"github.com/mp-hl-2021/muzio/internal/interface/memory/entityrepo"
 	"github.com/mp-hl-2021/muzio/internal/interface/memory/playlistrepo"
@@ -39,7 +40,10 @@ func main() {
 		PlaylistStorage: playlistrepo.NewMemory(),
 	}
 
-	service := httpapi.NewApi(accountUseCases, entityUseCases, playlistUseCases)
+	linkCheckerChannel := make(chan string)
+	service := httpapi.NewApi(accountUseCases, entityUseCases, playlistUseCases, linkCheckerChannel)
+	linkChecker := linkchecker.New(entityUseCases, linkCheckerChannel)
+	linkChecker.CheckMusicalEntities()
 
 	server := http.Server{
 		Addr:         ":8080",

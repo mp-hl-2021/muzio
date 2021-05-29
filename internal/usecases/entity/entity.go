@@ -15,6 +15,7 @@ type MusicalEntity struct {
 type Interface interface {
 	CreateMusicalEntity(artist, album, track string, links []common.Link) (string, error)
 	GetMusicalEntityById(id string) (MusicalEntity, error)
+	UpdateLinks(id string, links []common.Link) error
 }
 
 type UseCases struct {
@@ -35,4 +36,8 @@ func (u *UseCases) GetMusicalEntityById(id string) (MusicalEntity, error) {
 		return MusicalEntity{}, err
 	}
 	return MusicalEntity{Artist: e.Artist, Album: e.Album, Track: e.Track, Links: e.Links}, err
+}
+
+func (u *UseCases) UpdateLinks(id string, links []common.Link) error {
+	return u.EntityStorage.UpdateLinks(id, links)
 }

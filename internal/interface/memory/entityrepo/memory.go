@@ -45,3 +45,15 @@ func (m *Memory) GetMusicalEntityById(id string) (entity.MusicalEntity, error) {
 	}
 	return e, nil
 }
+
+func (m *Memory) UpdateLinks(id string, links []common.Link) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.entitiesById[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	e.Links = links
+	m.entitiesById[id] = e
+	return nil
+}

@@ -60,3 +60,20 @@ func (p *Postgres) GetMusicalEntityById(id string) (entity.MusicalEntity, error)
 	}
 	return e, err
 }
+
+const queryUpdateLinks = `
+	UPDATE entities
+	SET links = $2::link[]
+	WHERE id = $1
+	RETURNING id
+`
+
+func (p *Postgres) UpdateLinks(id string, links []common.Link) error {
+	var uid string
+	row := p.conn.QueryRow(queryUpdateLinks, id, pq.Array(links))
+	err := row.Scan(&uid)
+	if err != nil && err == sql.ErrNoRows {
+		return domain.ErrNotFound
+	}
+	return err
+}

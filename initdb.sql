@@ -11,7 +11,8 @@ CREATE TABLE accounts (
 
 CREATE TYPE link AS (
     serviceName varchar(255),
-    url varchar(255)
+    url varchar(255),
+    isAvailable boolean not null
 );
 
 -- DROP TABLE IF EXISTS entities CASCADE;
