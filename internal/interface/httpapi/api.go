@@ -45,7 +45,8 @@ func (a *Api) Router() http.Handler {
 
 	router.Handle("/metrics", promhttp.Handler())
 	router.Use(measurer())
-	router.Use(a.logger)
+
+	router.HandleFunc("/blank", a.blank).Methods(http.MethodGet)
 
 	router.HandleFunc("/signup", a.postSignup).Methods(http.MethodPost)
 	router.HandleFunc("/signin", a.postSignin).Methods(http.MethodPost)
@@ -59,6 +60,8 @@ func (a *Api) Router() http.Handler {
 	router.HandleFunc("/drop/music", a.postMusicalEntity).Methods(http.MethodPost)
 	router.HandleFunc("/drop/playlist", a.authenticate(a.postPlaylist)).Methods(http.MethodPost)
 
+	router.Use(a.logger)
+
 	return router
 }
 
@@ -67,16 +70,33 @@ type PostSignupRequestModel struct {
 	Password string `json:"password"`
 }
 
+func (a *Api) blank(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Location", "loc")
+	psrm := PostSignupRequestModel{Login: "login1", Password: "password123"}
+	b, err := json.Marshal(psrm)
+	if err != nil{
+		fmt.Println("JSONSHIT")
+		return
+	}
+	fmt.Println(b)
+	w.Write(b)
+	w.WriteHeader(http.StatusCreated)
+}
+
 func (a *Api) postSignup(w http.ResponseWriter, r *http.Request) {
 	var model PostSignupRequestModel
 	err := json.NewDecoder(r.Body).Decode(&model)
 	if err != nil {
+		fmt.Println("Decode failed")
+		fmt.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	acc, err := a.AccountUseCases.CreateAccount(model.Login, model.Password)
 	if err != nil {
+		fmt.Println("Acc creation failed")
+		fmt.Println(err)
 		handleError(err, w)
 		return
 	}
@@ -321,21 +341,21 @@ func handleError(err error, w http.ResponseWriter) {
 
 type responseWriterObserver struct {
 	http.ResponseWriter
-	status		 int
-	wroteHandler bool
+	status 		int
+	wroteHeader bool
 }
 
-func (o *responseWriterObserver) WriteHandler(code int) {
+func (o *responseWriterObserver) WriteHeader(code int) {
 	o.ResponseWriter.WriteHeader(code)
-	if o.wroteHandler {
+	if o.wroteHeader {
 		return
 	}
-	o.wroteHandler = true
+	o.wroteHeader = true
 	o.status = code
 }
 
 func (o *responseWriterObserver) StatusCode() int {
-	if !o.wroteHandler {
+	if !o.wroteHeader {
 		return http.StatusOK
 	}
 	return o.status

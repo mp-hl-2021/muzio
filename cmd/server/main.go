@@ -42,7 +42,7 @@ func main() {
 	service := httpapi.NewApi(accountUseCases, entityUseCases, playlistUseCases)
 
 	server := http.Server{
-		Addr:         "localhost:8080",
+		Addr:         ":8080",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 

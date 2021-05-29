@@ -8,7 +8,7 @@ global:
 scrape_configs:
   - job_name: prometheus
     static_configs:
-      - targets: ['localhost:9090/metrics']
+      - targets: ['localhost:9090']
   - job_name: muzio
     static_configs:
       - targets: ['server:8080']
