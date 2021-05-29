@@ -74,8 +74,8 @@ func (a *Api) blank(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Location", "loc")
 	psrm := PostSignupRequestModel{Login: "login1", Password: "password123"}
 	b, err := json.Marshal(psrm)
-	if err != nil{
-		fmt.Println("JSONSHIT")
+	if err != nil {
+		fmt.Println("Failed to parse JSON")
 		return
 	}
 	fmt.Println(b)
