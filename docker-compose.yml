@@ -10,8 +10,10 @@ services:
     ports:
       - 8080:8080
     volumes:
-      - ./cmd/server/app.rsa:/app.rsa
-      - ./cmd/server/app.rsa.pub:/app.rsa.pub
+      - ./app.rsa:/app.rsa
+      - ./app.rsa.pub:/app.rsa.pub
+#      - ./cmd/server/app.rsa:/app.rsa
+#      - ./cmd/server/app.rsa.pub:/app.rsa.pub
   db:
     image: postgres
     environment:
@@ -19,4 +21,11 @@ services:
       POSTGRES_PASSWORD: 12345678
       #POSTGRES_DB: postgres
     volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/initdb.sql
+      - ./initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml

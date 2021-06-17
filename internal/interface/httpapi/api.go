@@ -10,8 +10,12 @@ import (
 	"github.com/mp-hl-2021/muzio/internal/usecases/account"
 	"github.com/mp-hl-2021/muzio/internal/usecases/entity"
 	"github.com/mp-hl-2021/muzio/internal/usecases/playlist"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -24,6 +28,7 @@ type Api struct {
 	AccountUseCases       account.Interface
 	MusicalEntityUseCases entity.Interface
 	PlaylistUseCases      playlist.Interface
+	Logger 				  zerolog.Logger
 }
 
 func NewApi(a account.Interface, e entity.Interface, p playlist.Interface) *Api {
@@ -31,11 +36,17 @@ func NewApi(a account.Interface, e entity.Interface, p playlist.Interface) *Api 
 		AccountUseCases: a,
 		MusicalEntityUseCases: e,
 		PlaylistUseCases: p,
+		Logger: log.With().Str("module", "http-server").Logger(),
 	}
 }
 
 func (a *Api) Router() http.Handler {
 	router := mux.NewRouter()
+
+	router.Handle("/metrics", promhttp.Handler())
+	router.Use(measurer())
+
+	router.HandleFunc("/blank", a.blank).Methods(http.MethodGet)
 
 	router.HandleFunc("/signup", a.postSignup).Methods(http.MethodPost)
 	router.HandleFunc("/signin", a.postSignin).Methods(http.MethodPost)
@@ -49,24 +60,43 @@ func (a *Api) Router() http.Handler {
 	router.HandleFunc("/drop/music", a.postMusicalEntity).Methods(http.MethodPost)
 	router.HandleFunc("/drop/playlist", a.authenticate(a.postPlaylist)).Methods(http.MethodPost)
 
+	router.Use(a.logger)
+
 	return router
 }
 
-type postSignupRequestModel struct {
+type PostSignupRequestModel struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
 }
 
+func (a *Api) blank(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Location", "loc")
+	psrm := PostSignupRequestModel{Login: "login1", Password: "password123"}
+	b, err := json.Marshal(psrm)
+	if err != nil {
+		fmt.Println("Failed to parse JSON")
+		return
+	}
+	fmt.Println(b)
+	w.Write(b)
+	w.WriteHeader(http.StatusCreated)
+}
+
 func (a *Api) postSignup(w http.ResponseWriter, r *http.Request) {
-	var model postSignupRequestModel
+	var model PostSignupRequestModel
 	err := json.NewDecoder(r.Body).Decode(&model)
 	if err != nil {
+		fmt.Println("Decode failed")
+		fmt.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	acc, err := a.AccountUseCases.CreateAccount(model.Login, model.Password)
 	if err != nil {
+		fmt.Println("Acc creation failed")
+		fmt.Println(err)
 		handleError(err, w)
 		return
 	}
@@ -77,7 +107,7 @@ func (a *Api) postSignup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Api) postSignin(w http.ResponseWriter, r *http.Request) {
-	var model postSignupRequestModel
+	var model PostSignupRequestModel
 	err := json.NewDecoder(r.Body).Decode(&model)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -307,4 +337,36 @@ func handleError(err error, w http.ResponseWriter) {
 		return
 	}
 	w.WriteHeader(http.StatusInternalServerError)
+}
+
+type responseWriterObserver struct {
+	http.ResponseWriter
+	status 		int
+	wroteHeader bool
+}
+
+func (o *responseWriterObserver) WriteHeader(code int) {
+	o.ResponseWriter.WriteHeader(code)
+	if o.wroteHeader {
+		return
+	}
+	o.wroteHeader = true
+	o.status = code
+}
+
+func (o *responseWriterObserver) StatusCode() int {
+	if !o.wroteHeader {
+		return http.StatusOK
+	}
+	return o.status
+}
+
+func (a *Api) logger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		o := &responseWriterObserver{ResponseWriter: w}
+		next.ServeHTTP(o, r)
+		fmt.Printf("method: %s; url: %s; status-code: %d; remote-addr: %s; duration: %v;\n",
+			r.Method, r.URL.String(), o.StatusCode(), r.RemoteAddr, time.Since(start))
+	})
 }
