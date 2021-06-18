@@ -1,6 +1,7 @@
 package linkchecker
 
 import (
+	"fmt"
 	"github.com/mp-hl-2021/muzio/internal/common"
 	"github.com/mp-hl-2021/muzio/internal/domain/entity"
 	"net/http"
@@ -15,11 +16,11 @@ func New(e entity.Interface) *LinkChecker {
 	return &LinkChecker{EntityStorage: e}
 }
 
-func (c *LinkChecker) Start(workers int) {
+func (c *LinkChecker) Start(workers int, interval time.Duration) {
 	ch := make(chan entity.MusicalEntity, workers)
 
 	go func() {
-		for range time.Tick(time.Second) {
+		for range time.Tick(interval) {
 			es, err := c.EntityStorage.GetBatchToCheck(workers)
 			if err != nil {
 				continue
@@ -32,18 +33,21 @@ func (c *LinkChecker) Start(workers int) {
 
 	for i := 0; i < workers; i++ {
 		go func() {
-			e := <-ch
-			nl := make([]common.Link, 0, len(e.Links))
-			for _, l := range e.Links {
-				isAvailable := true
-				_, err := http.Get(l.Url)
-				if err != nil {
-					isAvailable = false
+			for {
+				e := <-ch
+				nl := make([]common.Link, 0, len(e.Links))
+				for _, l := range e.Links {
+					isAvailable := true
+					resp, err := http.Get(l.Url)
+					if err != nil || resp.StatusCode != http.StatusOK{
+						isAvailable = false
+					}
+					l.IsAvailable = isAvailable
+					fmt.Printf("Link %s:%s isAvailable: %t\n", l.ServiceName, l.Url, l.IsAvailable)
+					nl = append(nl, l)
 				}
-				l.IsAvailable = isAvailable
-				nl = append(nl, l)
+				_ = c.EntityStorage.UpdateLinks(e.Id, nl)
 			}
-			c.EntityStorage.UpdateLinks(e.Id, nl)
 		}()
 	}
 }

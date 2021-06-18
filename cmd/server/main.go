@@ -41,7 +41,7 @@ func main() {
 	}
 
 	linkChecker := linkchecker.New(entityUseCases.EntityStorage)
-	linkChecker.Start(10)
+	linkChecker.Start(10, 10 * time.Second)
 
 	service := httpapi.NewApi(accountUseCases, entityUseCases, playlistUseCases)
 
