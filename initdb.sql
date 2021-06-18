@@ -21,7 +21,8 @@ CREATE TABLE entities (
     artist varchar(255) not null,
     album varchar(255),
     track varchar(255),
-    links link[] not null
+    links link[] not null,
+    checkedAt timestamp without time zone default -infinity
 );
 
 -- DROP TABLE IF EXISTS playlists CASCADE;

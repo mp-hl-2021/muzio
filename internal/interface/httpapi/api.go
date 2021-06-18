@@ -29,16 +29,14 @@ type Api struct {
 	MusicalEntityUseCases entity.Interface
 	PlaylistUseCases      playlist.Interface
 	Logger 				  zerolog.Logger
-	IdsToCheckChannel     chan<- string
 }
 
-func NewApi(a account.Interface, e entity.Interface, p playlist.Interface, c chan<- string) *Api {
+func NewApi(a account.Interface, e entity.Interface, p playlist.Interface) *Api {
 	return &Api{
 		AccountUseCases: a,
 		MusicalEntityUseCases: e,
 		PlaylistUseCases: p,
 		Logger: log.With().Str("module", "http-server").Logger(),
-		IdsToCheckChannel: c,
 	}
 }
 
@@ -144,7 +142,6 @@ func (a *Api) getMusicalEntity(w http.ResponseWriter, r *http.Request) {
 		handleError(err, w)
 		return
 	}
-	a.checkMusicalEntity(eid)
 	m := getMusicalEntityResponseModel{
 		Artist: e.Artist,
 		Album: e.Album,
@@ -174,7 +171,6 @@ func (a *Api) getPlaylist(w http.ResponseWriter, r *http.Request) {
 		handleError(err, w)
 		return
 	}
-	a.checkPlaylist(pid)
 	m := getPlaylistResponseModel{
 		Name: p.Name,
 		Content: make([]getMusicalEntityResponseModel, 0, len(p.Content)),
@@ -226,7 +222,6 @@ func (a *Api) putPlaylist(w http.ResponseWriter, r *http.Request) {
 		handleError(err, w)
 		return
 	}
-	a.checkPlaylist(pid)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -281,7 +276,6 @@ func (a *Api) postMusicalEntity(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	a.checkMusicalEntity(eid)
 	nm := postMusicalEntityResponseModel{Id: eid}
 	if err := json.NewEncoder(w).Encode(nm); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -311,7 +305,6 @@ func (a *Api) postPlaylist(w http.ResponseWriter, r *http.Request) {
 		handleError(err, w)
 		return
 	}
-	a.checkPlaylist(pid)
 	nm := postMusicalEntityResponseModel{Id: pid}
 	if err := json.NewEncoder(w).Encode(nm); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -392,23 +385,4 @@ func (a *Api) logger(next http.Handler) http.Handler {
 		fmt.Printf("method: %s; url: %s; status-code: %d; remote-addr: %s; duration: %v;\n",
 			r.Method, r.URL.String(), o.StatusCode(), r.RemoteAddr, time.Since(start))
 	})
-}
-
-func (a *Api) checkMusicalEntity(eid string) {
-	go func() {
-		a.IdsToCheckChannel <- eid
-	}()
-}
-
-func (a *Api) checkPlaylist(pid string) {
-	go func() {
-		p, err := a.PlaylistUseCases.GetPlaylistById(pid)
-		if err != nil {
-			return
-		}
-		for _, c := range p.Content {
-			eid := c
-			a.IdsToCheckChannel <- eid
-		}
-	}()
 }

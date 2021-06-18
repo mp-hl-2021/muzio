@@ -61,6 +61,36 @@ func (p *Postgres) GetMusicalEntityById(id string) (entity.MusicalEntity, error)
 	return e, err
 }
 
+const queryGetBatchToCheck = `
+	UPDATE entities
+	SET checkedAt = now()
+	WHERE id IN (
+		SELECT id FROM entities 
+		ORDER BY checkedAt ASC  
+		LIMIT $1
+	)
+	RETURNING id, artist, album, track, links::link[]
+`
+
+func (p *Postgres) GetBatchToCheck(number int) ([]entity.MusicalEntity, error) {
+	result := make([]entity.MusicalEntity, 0, number)
+	rows, err := p.conn.Query(queryGetBatchToCheck, number)
+	if err != nil {
+		return result, err
+	}
+	for {
+		if !rows.Next() {
+			return result, rows.Err()
+		}
+		e := entity.MusicalEntity{}
+		err := rows.Scan(&e.Id, &e.Artist, &e.Album, &e.Track, pq.Array(&e.Links))
+		if err != nil {
+			return result, domain.ErrNotFound
+		}
+		result = append(result, e)
+	}
+}
+
 const queryUpdateLinks = `
 	UPDATE entities
 	SET links = $2::link[]

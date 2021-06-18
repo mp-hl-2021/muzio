@@ -40,10 +40,10 @@ func main() {
 		PlaylistStorage: playlistrepo.NewMemory(),
 	}
 
-	linkCheckerChannel := make(chan string)
-	service := httpapi.NewApi(accountUseCases, entityUseCases, playlistUseCases, linkCheckerChannel)
-	linkChecker := linkchecker.New(entityUseCases, linkCheckerChannel)
-	linkChecker.CheckMusicalEntities()
+	linkChecker := linkchecker.New(entityUseCases.EntityStorage)
+	linkChecker.Start(10)
+
+	service := httpapi.NewApi(accountUseCases, entityUseCases, playlistUseCases)
 
 	server := http.Server{
 		Addr:         ":8080",

@@ -2,26 +2,37 @@ package linkchecker
 
 import (
 	"github.com/mp-hl-2021/muzio/internal/common"
-	"github.com/mp-hl-2021/muzio/internal/usecases/entity"
+	"github.com/mp-hl-2021/muzio/internal/domain/entity"
 	"net/http"
+	"time"
 )
 
 type LinkChecker struct {
-	MusicalEntityUseCases entity.Interface
-	IdsToCheckChannel     <-chan string
+	EntityStorage entity.Interface
 }
 
-func New(e entity.Interface, c <-chan string) *LinkChecker {
-	return &LinkChecker{MusicalEntityUseCases: e, IdsToCheckChannel: c}
+func New(e entity.Interface) *LinkChecker {
+	return &LinkChecker{EntityStorage: e}
 }
 
-func (c *LinkChecker) CheckMusicalEntities() {
+func (c *LinkChecker) Start(workers int) {
+	ch := make(chan entity.MusicalEntity, workers)
+
 	go func() {
-		for eid := range c.IdsToCheckChannel {
-			e, err := c.MusicalEntityUseCases.GetMusicalEntityById(eid)
+		for range time.Tick(time.Second) {
+			es, err := c.EntityStorage.GetBatchToCheck(workers)
 			if err != nil {
 				continue
 			}
+			for _, e := range es {
+				ch <- e
+			}
+		}
+	}()
+
+	for i := 0; i < workers; i++ {
+		go func() {
+			e := <-ch
 			nl := make([]common.Link, 0, len(e.Links))
 			for _, l := range e.Links {
 				isAvailable := true
@@ -32,7 +43,7 @@ func (c *LinkChecker) CheckMusicalEntities() {
 				l.IsAvailable = isAvailable
 				nl = append(nl, l)
 			}
-			_ = c.MusicalEntityUseCases.UpdateLinks(eid, nl)
-		}
-	}()
+			c.EntityStorage.UpdateLinks(e.Id, nl)
+		}()
+	}
 }
