@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/mp-hl-2021/muzio/internal/interface/httpapi"
+	"github.com/mp-hl-2021/muzio/internal/interface/linkchecker"
 	"github.com/mp-hl-2021/muzio/internal/interface/memory/accountrepo"
 	"github.com/mp-hl-2021/muzio/internal/interface/memory/entityrepo"
 	"github.com/mp-hl-2021/muzio/internal/interface/memory/playlistrepo"
@@ -48,6 +49,9 @@ func main() {
 	playlistUseCases := &playlist.UseCases{
 		PlaylistStorage: playlistrepo.NewMemory(),
 	}
+
+	linkChecker := linkchecker.New(entityUseCases.EntityStorage)
+	linkChecker.Start(10, 10 * time.Second)
 
 	service := httpapi.NewApi(accountUseCases, entityUseCases, playlistUseCases)
 

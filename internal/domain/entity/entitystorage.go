@@ -13,4 +13,6 @@ type MusicalEntity struct {
 type Interface interface {
 	CreateMusicalEntity(artist, album, track string, links []common.Link) (MusicalEntity, error)
 	GetMusicalEntityById(id string) (MusicalEntity, error)
+	GetBatchToCheck(number int) ([]MusicalEntity, error)
+	UpdateLinks(id string, links []common.Link) error
 }
